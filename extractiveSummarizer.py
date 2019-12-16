@@ -9,32 +9,67 @@ import os
 import sys
 import re
 
+#Reads in file based on extension
+def read(doc):
+	regex = re.compile(
+		r'^(?:http|ftp)s?://' # http:// or https://
+		r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|' #domain...
+		r'localhost|' #localhost...
+		r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})' # ...or ip
+		r'(?::\d+)?' # optional port
+		r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+	if (re.match(regex, doc)):
+		print('Scanning HTML link')
+		sys.exit(0)
+	else:
+		filename, ext = os.path.splitext(doc)
+		article = []
+		if (ext == '.txt'):
+			print('Scanning text file')
+			with open(doc, 'r') as INFILE:
+				data = INFILE.readlines()
+				article = data[0].split('. ')
+				INFILE.close()
+		elif (ext in ['.docx', '.doc']):
+			print('Scanning document')
+			doc = Document(doc)
+			article = []
+			for p in doc.paragraphs:
+				sentence = p.text.split('. ')
+				for s in sentence:
+					article.append(s)
+			#print(article)
+			#sys.exit(0)
+		elif (ext == '.pdf'):
+			print('Scanning pdf file')
+			sys.exit(0)
+		else:
+			print('Sorry this is an incompatible file.\n' + 
+				'Please submit a pdf, doc, docx, html, or txt extension')
+			sys.exit(1)
+	return article
 
-
+#Reads in, cleans and tokenizes document
 def read_and_clean(doc):
-	article = []
+	article = read(doc)
 	article_tokenized = []
-	with open(doc, 'r') as INFILE:
-		data = INFILE.readlines()
-		article = data[0].split('. ')
-		sentences = []
+	sentences = []
 
-		stop_words = set(stopwords.words('english'))
-		article_tokenized = []
-		stemmer = PorterStemmer()
+	stop_words = set(stopwords.words('english'))
+	article_tokenized = []
+	stemmer = PorterStemmer()
 
-		for sentence in article:
-			tokens = word_tokenize(sentence)
-			tokens = [t for t in tokens if not t in stop_words]
-			tokens = [stemmer.stem(t) for t in tokens]
-			tokens = [t.lower() for t in tokens]
-			article_tokenized.append(tokens)
-		INFILE.close()
+	for sentence in article:
+		tokens = word_tokenize(sentence)
+		tokens = [t for t in tokens if not t in stop_words]
+		tokens = [stemmer.stem(t) for t in tokens]
+		tokens = [t.lower() for t in tokens]
+		article_tokenized.append(tokens)
 		
 	return article, article_tokenized
 
 def similarity(s1, s2, dic):
-	#dic = list(set(s1 + s2))
+	#Create the embedded
 	v1 = [0] * len(dic)
 	v2 = [0] * len(dic)
 	for w in s1:
@@ -51,8 +86,6 @@ def cosine_similarity_matrix(article_tokenized):
 	for w in article_tokenized:
 		dic.update(w)
 	dic = list(dic)
-	#dic = list(dic.update(w) for w in article_tokenized)
-	#dic = list(dic)
 	for i in range(len(article_tokenized)):
 		for j in range(i):
 				matrix[i][j] = matrix[j][i] = similarity(article_tokenized[i], article_tokenized[j], dic)
@@ -62,11 +95,8 @@ def cosine_similarity_matrix(article_tokenized):
 def summarize(doc, length=5):
 	article, tokens = read_and_clean(doc)
 	matrix = cosine_similarity_matrix(tokens)
-	# Step 3 - Rank sentences in similarity matrix
 	similarity_graph = nx.from_numpy_array(matrix)
 	scores = nx.pagerank(similarity_graph)
-
-	# Step 4 - Sort the rank and pick top sentences
 	ranked_sentence = sorted(((scores[i],s) for i,s in enumerate(article)), reverse=True)    
 	print("Indexes of top ranked_sentence order are ", ranked_sentence)    
 
@@ -76,10 +106,6 @@ def summarize(doc, length=5):
 		summarize.append(ranked_sentence[i][1])
 
 	return summarize
-	
-
-
-
 
 
 def main():
@@ -95,7 +121,6 @@ def main():
 		summary = summarize(document, length)
 	else:
 		summary = summarize(document)
-	#print("Summarize Text: \n", ". ".join(summary))
 	print("Summarize Text: \n", '. '.join(summary))
 
 
